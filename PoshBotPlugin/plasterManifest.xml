@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plasterManifest
+  schemaVersion="1.1"
+  templateType="Item" xmlns="http://www.microsoft.com/schemas/PowerShell/Plaster/v1">
+  <metadata>
+    <name>PoshBotPlugin</name>
+    <id>e503f399-3717-4713-9588-aa5ff7c97bb1</id>
+    <version>0.0.1</version>
+    <title>New PoshBot Plugin</title>
+    <description>Creates a set of files necessary for a Poshbot Plugin</description>
+    <author>Josh Corrick (@joshcorr)</author>
+    <tags>Plugin, PoshBot, Slack</tags>
+  </metadata>
+  <parameters>
+    <parameter name='PluginName'
+        type='text'
+        prompt='Enter the name of the plugin'/>
+    <parameter name='Description'
+        type='text'
+        prompt='Enter description of the plugin'/>
+    <parameter name='Author'
+        type='text'
+        prompt='Enter Author of the plugin'/>
+    <parameter name='Company'
+        type='text'
+        prompt='Enter Company which uses the plugin'/>
+    <parameter name='Version'
+        type='text'
+        prompt='Enter the version number of the plugin'
+        default='0.0.1'/>
+
+    <parameter name='Permissions'
+               type='multichoice'
+               default='0,1'
+               store='text'
+               prompt='Select Plugin Permissions'>
+        <choice label='&amp;Read'
+                help='Can run all Get commands'
+                value="Read"/>
+        <choice label='&amp;Write'
+                help='Can run all Set, Write, Update commands'
+                value="Write"/>
+        <choice label='&amp;Execute'
+                help='Can run all Invoke, Start commands'
+                value="Execute"/>
+        <choice label='&amp;None'
+                help='No options specified.'
+                value="None"/>
+    </parameter>
+  </parameters>
+  <content>
+    <message>Creating core files</message>
+    <newModuleManifest destination='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1'
+                    moduleVersion='$PLASTER_PARAM_Version'
+                    rootModule='${PLASTER_PARAM_pluginName}.psm1'
+                    description='${PLASTER_PARAM_Description}'
+                    author='${PLASTER_PARAM_Author}'
+                    companyName='${PLASTER_PARAM_Company}'
+                    encoding='UTF8'
+                    openInEditor="true"/>
+    <templateFile source="basefiles\plugin.psm1"
+        destination='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psm1'
+        encoding='UTF8'/>
+
+    <message>Modifying Manifest</message>
+    <modify path='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1' encoding='UTF8'>
+        <replace condition="$PLASTER_FileContent -match '# RequiredModules = @\(\)'">
+            <original>(?s)(# RequiredModules = @\(\))</original>
+            <substitute expand='true'>RequiredModules = @('PoshBot')</substitute>
+        </replace>
+    </modify>
+
+    <modify path='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1' encoding='UTF8'>
+        <replace condition="($PLASTER_FileContent -match '} # End of PSData hashtable') -and ($PSVersionTable.PSVersion.Major -le '5') ">
+            <original>(?s)(} # End of PSData hashtable)</original>
+            <substitute expand='true'>`t# Prerelease Branch`r`n`t`t# Prerelease = ''`r`n`t} # End of PSData hashtable</substitute>
+        </replace>
+    </modify>
+
+    <modify path='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1' encoding='UTF8'>
+        <replace condition="$PLASTER_FileContent -notmatch 'Permissions = @'">
+            <original>(?s)(PrivateData = @{)</original>
+            <substitute expand='true'>PrivateData = @{`r`n`tPermissions = @(`r`n`r`n`t)</substitute>
+        </replace>
+    </modify>
+
+    <modify path='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1' encoding='UTF8'>
+        <replace condition="$PLASTER_FileContent -match 'Permissions = @' -and $PLASTER_FileContent -notmatch 'Can run all Invoke, Start commands'">
+            <original>(?s)(Permissions = @\()</original>
+            <substitute expand='true'>Permissions = @(`r`n`t`t@{`r`n`t`t`tName = 'Execute'`r`n`t`t`tDescription = 'Can run all Invoke, Start commands'`r`n`t`t}</substitute>
+        </replace>
+    </modify>
+
+    <modify path='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1' encoding='UTF8'>
+        <replace condition="$PLASTER_FileContent -match 'Permissions = @' -and $PLASTER_FileContent -notmatch 'Can run all Set, Write, Update commands'">
+            <original>(?s)(Permissions = @\()</original>
+            <substitute expand='true'>Permissions = @(`r`n`t`t@{`r`n`t`t`tName = 'Write'`r`n`t`t`tDescription = 'Can run all Set, Write, Update commands'`r`n`t`t}</substitute>
+        </replace>
+    </modify>
+
+    <modify path='${PLASTER_PARAM_pluginName}\${PLASTER_PARAM_pluginName}.psd1' encoding='UTF8'>
+        <replace condition="$PLASTER_FileContent -match 'Permissions = @' -and $PLASTER_FileContent -notmatch 'Can run all Get commands'">
+            <original>(?s)(Permissions = @\()</original>
+            <substitute expand='true'>Permissions = @(`r`n`t`t@{`r`n`t`t`tName = 'Read'`r`n`t`t`tDescription = 'Can run all Get commands'`r`n`t`t}</substitute>
+        </replace>
+    </modify>
+  </content>
+</plasterManifest>
