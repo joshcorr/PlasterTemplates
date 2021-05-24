@@ -1,0 +1,11 @@
+{
+    //Put custom settings for you project here
+    //Or "borrow" some from other projects
+    // dbatools.io has some great ones
+    "files.trimTrailingWhitespace": true,
+    "[markdown]": {
+        "files.trimTrailingWhitespace": false
+    },
+    "powershell.codeFormatting.preset": "OTBS"
+    //etc
+}

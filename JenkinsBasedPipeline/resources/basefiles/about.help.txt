@@ -1,0 +1,12 @@
+TOPIC
+    about_<%=$PLASTER_PARAM_ModuleName%>
+
+SHORT DESCRIPTION
+    <%=$PLASTER_PARAM_Description%>
+
+LONG DESCRIPTION
+    This module contains custom functions that...
+
+    For this module to properly load all of the functions will need...
+
+KEYWORDS

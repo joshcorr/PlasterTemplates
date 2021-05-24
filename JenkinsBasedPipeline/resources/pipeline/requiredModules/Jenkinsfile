@@ -1,0 +1,114 @@
+pipeline {
+    environment {
+        moduleName = '<%=$PLASTER_PARAM_ModuleName%>'
+    }
+    agent {
+        node {
+            customWorkspace './<%=$PLASTER_PARAM_ModuleName%>'
+        }
+    }
+    options {
+        //Incase you want to only have one build at a time
+        disableConcurrentBuilds()
+    }
+    //First four stages always run.
+    //IntegrationTest only runs on PR to <%=$PLASTER_PARAM_Default_Git_Branch%>
+    //Version only happens after PR is merged
+    //Build happens if PR to <%=$PLASTER_PARAM_Default_Git_Branch%> or PR is merged
+    //Prerelase changes temporarily the tag in psd1, and publishes module to PSRepository
+    //Release publishes module to PSRepository
+    stages {
+        stage('Clean') {
+            steps {
+                powershell 'Import-Module InvokeBuild -Force'
+                powershell 'Invoke-Build Clean'
+            }
+        }
+        stage('InstallDependencies'){
+            //Saves Dependencies necessary for any unit/intigration tests
+            steps {
+                powershell 'Invoke-Build SaveModuleDependencies'
+            }
+        }
+        stage('ScriptAnalyzer') {
+            steps {
+                powershell 'Invoke-Build Analyze'
+            }
+        }
+        stage('UnitTest') {
+            steps {
+                powershell 'Invoke-Build UnitTest'
+            }
+        }
+        stage('IntegrationTest') {
+            when { changeRequest target: '<%=$PLASTER_PARAM_Default_Git_Branch%>'}
+            steps {
+                powershell 'Invoke-Build IntegrationTest'
+            }
+        }
+        stage('Version'){
+            when { allOF {
+                branch '<%=$PLASTER_PARAM_Default_Git_Branch%>'
+                //Enusres that versioning will not loop continually
+                expression { script { powershell returnStdout: true, script: 'if(git log -1 | Select-String  -Pattern "ci version increment"{$null}else{$true}'}}
+                }
+            }
+            steps {
+                //This part updates the version in the psd1
+                powershell 'Invoke-Build UpdateVersion'
+                //credentials will need to be configured in Jenkins to whatever you are using gitlab, bitbucket, github, etc.
+                //Auth varies by type and should be a API token instead of username/password.
+                withCredentials([usernamePassword(credentialsID: 'gitSeviceAccount', passwordVariable: 'GITSERVICE_PASSWORD', passwordVariable: 'GITSERVICE_USERNAME')]) {
+                    script {
+                        VERSION = powershell returnStdout: true, script: "(Import-PowerShellDataFile './${moduleName}/${moduleName}.psd1').ModuleVersion"
+                    }
+                    //This part updates git and pushes the version back
+                    powershell("git config user.email 'gitservice@example.com'")
+                    powershell("git config user.name 'gitservice'")
+                    powershell("git add ${moduleName}/${moduleName}.psd1 ")
+                    powershell("git commit -a -m 'ci version increment ${VERSION}'")
+                    powershell("git push https://${GITSERVICE_USERNAME}:${GITSERVICE_PASSWORD}@gitsever.example.com/project/${ModuleName}.git HEAD:${BRANCH_NAME}")
+                }
+            }
+        }
+        stage('Build') {
+            when {
+                anyOf {
+                    changeRequest target: '<%=$PLASTER_PARAM_Default_Git_Branch%>'
+                    branch '<%=$PLASTER_PARAM_Default_Git_Branch%>'
+                }
+            }
+            steps {
+                powershell 'Invoke-Build Package'
+            }
+        }
+        stage('PreRelease'){
+            when {
+                tag "prerelease-*"
+            }
+            steps {
+                powershell "Invoke-Build -Task PrereleaseTag -ReleaseTag beta"
+                withCredentials([string(credentialsId: 'PowerShellPublisher', variable: 'APIKey')]) {
+                    powershell "Invoke-Build -Task Publish -APIKey ${APIKey}"
+                }
+            }
+        }
+        stage('Release'){
+            when {
+                branch '<%=$PLASTER_PARAM_Default_Git_Branch%>'
+            }
+            steps {
+                withCredentials([string(credentialsId: 'PowerShellPublisher', variable: 'APIKey')]) {
+                    powershell "Invoke-Build -Task Publish -APIKey ${APIKey}"
+                }
+            }
+        }
+    }
+    post {
+        always {
+            //if Pester supports junit did in 4x
+            junit '/Artifcats/*Test.xml'
+            powershell "Invoke-Build PostClean"
+        }
+    }
+}

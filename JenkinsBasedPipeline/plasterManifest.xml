@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A lot of credit goes to the following blogs-->
+<!-- https://ephos.github.io/posts/2018-4-30-Lets-Get-Plastered -->
+<!-- https://powershellexplained.com/2017-05-12-PowerShell-Plaster-adventures-in/?utm_source=blog&utm_medium=blog&utm_content=getplastered -->
+<!-- Also reading the manual under docs/en-US/about_Plaster_CreatingAManifest.help.md-->
+<plasterManifest
+  schemaVersion="1.1"
+  templateType="Project" xmlns="http://www.microsoft.com/schemas/PowerShell/Plaster/v1">
+  <metadata>
+    <name>JenkinsBasedPipeline</name>
+    <id>cdbf56f0-a373-43aa-ade4-ab9d2022b48c</id>
+    <version>0.0.1</version>
+    <title>Jenkins Based Pipeline</title>
+    <description>A Template for quickly setting up modules building in Jenkis</description>
+    <author>Josh Corrick (@joshcorr)</author>
+    <tags>Module, ScriptModule, ModuleManifest</tags>
+  </metadata>
+  <parameters>
+    <parameter name='ModuleName'
+                    type='text'
+                    prompt='What is your module name?'/>
+    <parameter name='Description'
+                    type='text'
+                    prompt='What does your module do?'/>
+    <parameter name='Author'
+                    type='text'
+                    prompt='Who are you?'/>
+    <parameter name='Company'
+                    type='text'
+                    prompt='Where do you work?'/>
+    <parameter name='Version'
+                    type='text'
+                    prompt='What version of the module are you on?'
+                    default='0.0.1'/>
+    <parameter name='Editor'
+                    type='choice'
+                    prompt='Are you going to use VSCode?'
+                    default='1'
+                    store='text'>
+            <choice label='&amp;No'
+                    help="No, I am using a different editor"
+                    value="None"/>
+            <choice label='&amp;Yes'
+                    help="Yes, I am using vscode"
+                    value="VSCode"/>
+    </parameter>
+    <parameter name='Required_Modules'
+                    type='choice'
+                    prompt='Are you going to explicitly list required modules (changes jenkins and build)?'
+                    default='1'
+                    store='text'>
+            <choice label='&amp;No'
+                    help="No required modules listed in psd1"
+                    value="None"/>
+            <choice label='&amp;Yes'
+                    help="RequiredModules will be listed in the following format: @{ModuleName = 'dbatools'; ModuleVersion = '1.0.116' }"
+                    value="Modules"/>
+    </parameter>
+    <parameter name='Default_Git_Branch'
+                    type='text'
+                    prompt='What is the name of your default git branch?'/>
+
+  </parameters>
+  <content>
+    <message> Creating core files</message>
+    <newModuleManifest destination='${PLASTER_PARAM_ModuleName}\${PLASTER_PARAM_ModuleName}.psd1'
+                    moduleVersion='$PLASTER_PARAM_Version'
+                    rootModule='${PLASTER_PARAM_ModuleName}.psm1'
+                    description='${PLASTER_PARAM_Description}'
+                    author='${PLASTER_PARAM_Author}'
+                    companyName='${PLASTER_PARAM_Company}'
+                    encoding='UTF8'
+                    openInEditor="true"/>
+    <templateFile source="resources\basefiles\module.psm1"
+        destination='${PLASTER_PARAM_ModuleName}\${PLASTER_PARAM_ModuleName}.psm1'
+        encoding='UTF8'/>
+
+    <!-- Ensure that the GUID used is consistent for tests and manifests -->
+    <modify path='${PLASTER_PARAM_ModuleName}\${PLASTER_PARAM_ModuleName}.psd1' encoding='UTF8'>
+        <replace condition="$PLASTER_FileContent -match 'GUID ='">
+            <original>(?s)(.{8}-.{4}-.{4}-.{4}-.{12})</original>
+            <substitute expand='true'>$PLASTER_GUID1</substitute>
+        </replace>
+    </modify>
+
+    <message>Creating folder structures</message>
+    <!-- The '' indicates that no source exists, so it creates the blank folder-->
+    <file source=''
+        destination=''/>
+    <file source=''
+        destination='tests\functions'/>
+    <file source=''
+        destination='tests\general'/>
+    <file source=''
+        destination='${PLASTER_PARAM_ModuleName}\en-us'/>
+    <file source=''
+        destination='${PLASTER_PARAM_ModuleName}\functions'/>
+    <file source=''
+        destination='${PLASTER_PARAM_ModuleName}\classes'/>
+
+    <message>Setting up Jenkins Pipeline files</message>
+    <!-- Creates Jenksins file and Build based on use of requiredModules -->
+    <templateFile condition="$PLASTER_PARAM_Required_Modules -eq 'None'"
+        source='resources\pipeline\default\Jenkinsfile'
+        destination='Jenkinsfile'/>
+    <templateFile condition="$PLASTER_PARAM_Required_Modules -eq 'Modules'"
+        source='resources\pipeline\requiredModules\Jenkinsfile'
+        destination='Jenkinsfile'/>
+    <templateFile condition="$PLASTER_PARAM_Required_Modules -eq 'None'"
+        source='resources\pipeline\default\build.ps1'
+        destination='${PLASTER_PARAM_ModuleName}.build.ps1'/>
+    <templateFile condition="$PLASTER_PARAM_Required_Modules -eq 'Modules'"
+        source='resources\pipeline\requiredModules\build.ps1'
+        destination='${PLASTER_PARAM_ModuleName}.build.ps1'/>
+
+    <message>Deploying common files</message>
+    <!-- You can reuse the same basefile and just save it multiple times to different locations-->
+    <templateFile source='resources\README.md'
+        destination='README.md'/>
+    <templateFile condition="$PLASTER_PARAM_Editor -eq 'VSCode'"
+        source='resources\editor\VSCode\settings.json'
+        destination='.vscode\settings.json'/>
+    <templateFile source='resources\basefiles\placeholder'
+        destination='${PLASTER_PARAM_ModuleName}\checks\palceholder.Tests.ps1'
+        encoding='UTF8'/>
+    <templateFile source='resources\basefiles\placeholder'
+        destination='${PLASTER_PARAM_ModuleName}\classes\palceholder.ps1'
+        encoding='UTF8'/>
+    <templateFile source='resources\basefiles\placeholder'
+        destination='${PLASTER_PARAM_ModuleName}\functions\palceholder.Tests.ps1'
+        encoding='UTF8'/>
+    <templateFile source='resources\basefiles\about.help.txt'
+        destination='${PLASTER_PARAM_ModuleName}\en-US\${PLASTER_PARAM_ModuleName}.help.txt'
+        encoding='UTF8'/>
+
+    <message>Creating test files</message>
+    <!-- If you have common pipeline test and checks these could all go here-->
+    <templateFile source='resources\tests\functions\Placeholder.Tests.ps1'
+        destination='tests\functions\Placeholder.Tests.ps1'
+        encoding='UTF8'/>
+    <templateFile source='resources\tests\general\Module.Tests.ps1'
+        destination='tests\general\${PLASTER_PARAM_ModuleName}.Tests.ps1'
+        encoding='UTF8'/>
+
+    <!-- Ensure that if the user is not using powershell core that there is a Prerelease tag -->
+    <modify path='${PLASTER_PARAM_ModuleName}\${PLASTER_PARAM_ModuleName}.psd1' encoding='UTF8'>
+        <replace condition="($PLASTER_FileContent -match '} # End of PSData hashtable') -and ($PSVersionTable.PSVersion.Major -le '5') ">
+            <original>(?s)(} # End of PSData hashtable)</original>
+            <substitute expand='true'>`t# Prerelease Branch`r`n`t`t# Prerelease = ''`r`n`t} # End of PSData hashtable</substitute>
+        </replace>
+    </modify>
+
+</content>
+</plasterManifest>
